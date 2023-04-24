@@ -10,8 +10,12 @@ mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true });
 mongoose.Promise = Promise;
 
 
-const Thought = mongoose.model('Thought', {
-
+const ThoughtSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    minlength: 2,
+    maxlength: 30,
+  },
   message: {
     type: String,
     required: true,
@@ -23,10 +27,12 @@ const Thought = mongoose.model('Thought', {
   },
   createdAt: {
     type: Date,
-    default: Date.now //daniel sa under föreläsning att man behöver använda typ () = new Date för att få datumet när posten skapas
+    default: () => new Date ()
   }
+  
+});
 
-  })
+const Thought = mongoose.model('Thought', ThoughtSchema)
 
 const port = process.env.PORT || 8080;
 const app = express();
@@ -36,38 +42,40 @@ app.use(cors());
 app.use(express.json());
 
 // Start defining your routes here
-app.get("/", (req, res) => {
+app.get("/", (_, res) => {
   res.send({
     Message:"Welcome to Happy Thoughts API! Here is a list of accessible endpoints.", 
     endpoints: 
-      {'GET': '/thoughts to get the 20 latest thoughs from the database',
-      'POST' : '/thougths to post new message',
-      'PATCH' : '/thougths/:thoughtId/like to like a posted message'
-     }
+      {
+        'GET': '/thoughts to get the 20 latest thoughs from the database',
+        'POST' : '/thougths with body {"message": "Your-happy-thought"} to post new message',
+        'PATCH' : '/thougths/:thoughtId/like to like a posted message'
+      }
     });
 });
 
 //should return a maximum of 20 thoughts with the most recent at the top
-app.get("/thoughts", async (req, res) => {
-  const thoughts = await Thought.find().sort({createdAt: 'desc'}).limit(20).exec()
+app.get("/thoughts", async (_, res) => {
+  const thoughts = await Thought.find().sort({createdAt: 'desc'}).limit(20).exec();
   res.status(200).json({thoughts});
 })
 
 
 app.post("/thoughts", async (req, res) => {
   // retrieve info sent by client to api endpoint
-  const {message} = req.body;
+  const {name, message} = req.body;
   // use Thought mongoose model to create database entry
-  const happyThought = new Thought({message});
+  const happyThought = new Thought({name, message});
 
   try {
     const savedHappyThought = await happyThought.save();
     res.status(201).json(savedHappyThought)
   }
-  catch (err) {
+  catch (error) {
     res.status(400).json({
+      success: false,
       message: 'Could not save thought to the database', 
-      error: err.errors
+      error: error
     })
   }
 })
@@ -76,9 +84,14 @@ app.patch("/thoughts/:thoughtId/like", async (req, res) => {
   const { thoughtId } = req.params;
   try {
    const updatedLikes = await Thought.findByIdAndUpdate(thoughtId, {$inc: {likes: 1}});
-   res.status(200).json({success: true, response: `Likes updated for id ${updatedLikes._id}`});
-  } catch (error) {
-   res.status(400).json({success: false, response: error});
+   res.status(200).json({
+    success: true, 
+    response: `Likes updated for id ${updatedLikes._id}`});
+  } 
+  catch (error) {
+   res.status(400).json({
+    success: false, 
+    response: error});
   }
 });
 
